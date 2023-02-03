@@ -148,6 +148,7 @@ type Opts struct {
 	Trailer               *http.Header // set the request trailer
 	Close                 bool         // set to close the connection after this transaction
 	NoRedirect            bool         // if this is set then the client won't follow redirects
+	DropReferer           bool         // if this is set then the client won't set Referer for redirects
 }
 
 // Copy creates a copy of the options
@@ -179,6 +180,16 @@ func ClientWithNoRedirects(c *http.Client) *http.Client {
 	clientCopy := *c
 	clientCopy.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
+	}
+	return &clientCopy
+}
+
+// ClientWithDropReferer makes a new http client which won't set Referer for redirects
+func ClientWithDropReferer(c *http.Client) *http.Client {
+	clientCopy := *c
+	clientCopy.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		req.Header.Set("Referer", "")
+		return nil
 	}
 	return &clientCopy
 }
@@ -270,7 +281,9 @@ func (api *Client) Call(ctx context.Context, opts *Opts) (resp *http.Response, e
 		req.SetBasicAuth(opts.UserName, opts.Password)
 	}
 	var c *http.Client
-	if opts.NoRedirect {
+	if opts.DropReferer {
+		c = ClientWithDropReferer(api.c)
+	} else if opts.NoRedirect {
 		c = ClientWithNoRedirects(api.c)
 	} else {
 		c = api.c
